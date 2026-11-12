@@ -1,0 +1,23 @@
+# Single entrypoint: the APIs serve their own prefix, so no path rewriting is needed.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app
+spec:
+  ingressClassName: nginx # patched per overlay if your controller differs (traefik, ...)
+  rules:
+    - host: app.example.com # patched per overlay
+      http:
+        paths:
+          - path: /api/py
+            pathType: Prefix
+            backend:
+              service: { name: api-python, port: { name: http } }
+          - path: /api/nest
+            pathType: Prefix
+            backend:
+              service: { name: api-nest, port: { name: http } }
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: frontend, port: { name: http } }

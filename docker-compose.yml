@@ -1,0 +1,45 @@
+# Local stack mirroring the Kubernetes setup. http://localhost:8080
+name: react-nginx-k8s-template
+
+x-db-env: &db-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}
+
+services:
+  frontend:
+    build:
+      context: ./apps/frontend
+      target: compose # adds the /api/* proxy, like the Ingress in Kubernetes
+    ports: ["8080:8080"]
+    depends_on: [api-python, api-nest]
+
+  api-python:
+    build: ./apps/api-python
+    environment: *db-env
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api-nest:
+    build: ./apps/api-nest
+    environment: *db-env
+    ports: ["3000:3000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

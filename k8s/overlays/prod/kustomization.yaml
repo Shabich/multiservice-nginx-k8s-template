@@ -1,0 +1,60 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: app-prod
+
+resources:
+  - namespace.yaml
+  - ../../base
+  - autoscaling.yaml
+
+# Tags are set by CI: `kustomize edit set image frontend=ghcr.io/<owner>/<repo>/frontend:<sha>`
+images:
+  - name: frontend
+    newName: ghcr.io/OWNER/react-nginx-k8s-template/frontend
+    newTag: latest
+  - name: api-python
+    newName: ghcr.io/OWNER/react-nginx-k8s-template/api-python
+    newTag: latest
+  - name: api-nest
+    newName: ghcr.io/OWNER/react-nginx-k8s-template/api-nest
+    newTag: latest
+
+configMapGenerator:
+  - name: frontend-config
+    behavior: replace
+    files:
+      - env.js
+
+# Create postgres.env from postgres.env.example (gitignored),
+# or replace this with External Secrets / Sealed Secrets.
+secretGenerator:
+  - name: postgres
+    envs:
+      - postgres.env
+
+patches:
+  - target: { kind: Ingress, name: app }
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          cert-manager.io/cluster-issuer: letsencrypt
+      - op: replace
+        path: /spec/rules/0/host
+        value: app.example.com
+      - op: add
+        path: /spec/tls
+        value:
+          - hosts: [app.example.com]
+            secretName: app-tls
+  - target: { kind: Deployment, name: "frontend|api-python|api-nest" }
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target: { kind: StatefulSet, name: postgres }
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 20Gi

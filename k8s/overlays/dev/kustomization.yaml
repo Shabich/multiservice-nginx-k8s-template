@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: app-dev
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+# Local images (see `make kind-load`)
+images:
+  - name: frontend
+    newName: react-nginx-k8s-template/frontend
+    newTag: dev
+  - name: api-python
+    newName: react-nginx-k8s-template/api-python
+    newTag: dev
+  - name: api-nest
+    newName: react-nginx-k8s-template/api-nest
+    newTag: dev
+
+configMapGenerator:
+  - name: frontend-config
+    behavior: replace
+    files:
+      - env.js
+
+# Dev-only credentials. Never do this in prod.
+secretGenerator:
+  - name: postgres
+    literals:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app
+      - POSTGRES_DB=app
+
+patches:
+  - target: { kind: Ingress, name: app }
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: app.localtest.me
+  - target: { kind: StatefulSet, name: postgres }
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 1Gi
